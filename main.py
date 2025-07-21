@@ -94,4 +94,7 @@ async def on_ready():
     check_sheet.start()
 
 # ----------- RUN BOT ----------- #
+from keep_alive import keep_alive
+keep_alive()
+
 bot.run(DISCORD_TOKEN)
