@@ -25,9 +25,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ----------- GOOGLE SHEETS SETUP ----------- #
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_KEYFILE, scope)
+
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1  # Main instruction tab
+import json
+creds_dict = json.loads(os.getenv("CREDS_JSON"))
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 
 # ----------- TASK LOOP ----------- #
 @tasks.loop(seconds=30)
