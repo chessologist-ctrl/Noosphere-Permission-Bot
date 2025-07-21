@@ -4,6 +4,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
 import os
+import json
 
 # ----------- LOAD .env ----------- #
 load_dotenv()
@@ -11,7 +12,6 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # ----------- CONFIG ----------- #
 SHEET_NAME = "Mason's Library"  # Google Sheet name
-JSON_KEYFILE = "creds.json"     # Service account key file
 
 # ----------- DISCORD SETUP ----------- #
 intents = discord.Intents.default()
@@ -26,11 +26,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ----------- GOOGLE SHEETS SETUP ----------- #
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-client = gspread.authorize(creds)
-sheet = client.open(SHEET_NAME).sheet1  # Main instruction tab
-import json
+# Load credentials from environment variable
 creds_dict = json.loads(os.getenv("CREDS_JSON"))
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+client = gspread.authorize(creds)
+sheet = client.open(SHEET_NAME).sheet1  # Main instruction tab
 
 # ----------- TASK LOOP ----------- #
 @tasks.loop(seconds=30)
