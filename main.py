@@ -9,6 +9,9 @@ import json
 # ----------- LOAD .env ----------- #
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+if not DISCORD_TOKEN:
+    print("❌ DISCORD_TOKEN not found in environment variables!")
+    exit(1)
 
 # ----------- CONFIG ----------- #
 SHEET_NAME = "Permission Bot"  # Google Sheet name
@@ -28,9 +31,17 @@ scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
 
 # Load credentials from environment variable
 creds_dict = json.loads(os.getenv("CREDS_JSON"))
+if not creds_dict:
+    print("❌ CREDS_JSON not found or invalid in environment variables!")
+    exit(1)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-client = gspread.authorize(creds)
-sheet = client.open(SHEET_NAME).sheet1  # Main instruction tab
+try:
+    client = gspread.authorize(creds)
+    sheet = client.open(SHEET_NAME).sheet1  # Main instruction tab
+    print(f"✅ Connected to Google Sheet: {SHEET_NAME}")
+except Exception as e:
+    print(f"❌ Failed to connect to Google Sheet: {str(e)}")
+    exit(1)
 
 # Dictionary mapping permission names to discord.Permissions attributes
 PERMISSION_MAPPING = {
@@ -104,16 +115,25 @@ async def check_sheet():
                 if not role:
                     raise Exception(f"Role '{role_name}' not found in guild '{guild.name}'")
 
+                current_perms = role.permissions
+
                 if action == "assign":
                     permissions = discord.Permissions()
                     for perm in permission_list:
                         perm = perm.strip().lower()
                         if perm in PERMISSION_MAPPING:
-                            setattr(permissions, PERMISSION_MAPPING[perm], True)
+                            if not getattr(current_perms, PERMISSION_MAPPING[perm]):  # Skip if already assigned
+                                setattr(permissions, PERMISSION_MAPPING[perm], True)
+                                print(f"🔧 Assigning {perm} to role '{role_name}'")
+                            else:
+                                print(f"⏭️ Skipping {perm} for role '{role_name}' as it’s already assigned")
                         else:
                             print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
-                    await role.edit(permissions=permissions)
-                    print(f"✅ [{guild.name}] Assigned permissions {permission_list} to role '{role_name}'.")
+                    if permissions.value != 0:  # Only edit if there are changes
+                        await role.edit(permissions=discord.Permissions(current_perms.value | permissions.value))
+                        print(f"✅ [{guild.name}] Assigned new permissions {permission_list} to role '{role_name}'.")
+                    else:
+                        print(f"ℹ️ No new permissions to assign for role '{role_name}'.")
 
                 elif action == "deassign":
                     permissions = discord.Permissions()
@@ -123,7 +143,6 @@ async def check_sheet():
                             setattr(permissions, PERMISSION_MAPPING[perm], False)
                         else:
                             print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
-                    current_perms = role.permissions
                     new_perms = discord.Permissions(current_perms.value & ~permissions.value)
                     await role.edit(permissions=new_perms)
                     print(f"✅ [{guild.name}] Deassigned permissions {permission_list} from role '{role_name}'.")
@@ -137,13 +156,19 @@ async def check_sheet():
 # ----------- BOT EVENTS ----------- #
 @bot.event
 async def on_ready():
-    print(f"✅ {bot.user.name} is live and monitoring servers:")
-    for g in bot.guilds:
-        print(f" - {g.name} ({g.id})")
-    check_sheet.start()
+    print(f"✅ Initializing bot connection...")
+    try:
+        print(f"✅ {bot.user.name} is live and monitoring servers:")
+        for g in bot.guilds:
+            print(f" - {g.name} ({g.id})")
+        check_sheet.start()
+        print(f"✅ check_sheet task started.")
+    except Exception as e:
+        print(f"❌ Error in on_ready: {str(e)}")
 
 # ----------- RUN BOT ----------- #
 from keep_alive import keep_alive
+print(f"✅ Starting keep_alive...")
 keep_alive()
-
+print(f"✅ Running bot with token...")
 bot.run(DISCORD_TOKEN)
