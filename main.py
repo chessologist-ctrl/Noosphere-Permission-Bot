@@ -142,11 +142,11 @@ async def check_sheet():
                         await target_channel.edit(overwrites=permissions)
                         print(f"✅ [{guild.name}] Deassigned permissions for role '{role_name}' on channel '{channel_name}'.")
 
-                sheet.update_cell(i, 8, "done")
+                sheet.update_cell(i, 7, "done")
 
             except Exception as e:
                 print(f"❌ [{guild.name}] Error on row {i}: {e}")
-                sheet.update_cell(i, 8, "error")
+                sheet.update_cell(i, 7, "error")
 
 # ----------- BOT EVENTS ----------- #
 @bot.event
