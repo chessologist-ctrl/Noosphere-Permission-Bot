@@ -82,6 +82,11 @@ PERMISSION_MAPPING = {
 async def check_sheet():
     print("🔄 Checking Google Sheet for actions...")
     records = sheet.get_all_records()
+    headers = sheet.row_values(1)  # Get sheet headers to verify structure
+    print(f"Sheet headers: {headers}")
+
+    status_index = headers.index("Status") + 1 if "Status" in headers else 4  # Dynamic status column index
+    print(f"Using Status column index: {status_index}")
 
     for i, row in enumerate(records, start=2):  # start=2 to match Sheet row numbers
         action = row.get("Action", "").strip().lower()
@@ -94,6 +99,7 @@ async def check_sheet():
 
         for guild in bot.guilds:
             try:
+                print(f"Processing row {i} in guild {guild.name}: Action={action}, Role={role_name}, Permissions={permission_list}")
                 role = discord.utils.get(guild.roles, name=role_name)
                 if not role:
                     raise Exception(f"Role '{role_name}' not found in guild '{guild.name}'")
@@ -117,17 +123,16 @@ async def check_sheet():
                             setattr(permissions, PERMISSION_MAPPING[perm], False)
                         else:
                             print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
-                    # Create a new permission set to remove specified permissions
                     current_perms = role.permissions
                     new_perms = discord.Permissions(current_perms.value & ~permissions.value)
                     await role.edit(permissions=new_perms)
                     print(f"✅ [{guild.name}] Deassigned permissions {permission_list} from role '{role_name}'.")
 
-                sheet.update_cell(i, 4, "done")  # Update Status column (now index 4 due to fewer columns)
+                sheet.update_cell(i, status_index, "done")
 
             except Exception as e:
-                print(f"❌ [{guild.name}] Error on row {i}: {e}")
-                sheet.update_cell(i, 4, "error")  # Update Status column
+                print(f"❌ [{guild.name}] Error on row {i}: {str(e)}")  # Ensure exception details are logged
+                sheet.update_cell(i, status_index, "error")
 
 # ----------- BOT EVENTS ----------- #
 @bot.event
