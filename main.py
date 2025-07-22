@@ -32,6 +32,51 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1  # Main instruction tab
 
+# Dictionary mapping permission names to discord.Permissions attributes
+PERMISSION_MAPPING = {
+    "create_instant_invite": "create_instant_invite",
+    "kick_members": "kick_members",
+    "ban_members": "ban_members",
+    "administrator": "administrator",
+    "manage_channels": "manage_channels",
+    "manage_guild": "manage_guild",
+    "add_reactions": "add_reactions",
+    "view_audit_log": "view_audit_log",
+    "priority_speaker": "priority_speaker",
+    "stream": "stream",
+    "view_channel": "view_channel",
+    "send_messages": "send_messages",
+    "send_tts_messages": "send_tts_messages",
+    "manage_messages": "manage_messages",
+    "embed_links": "embed_links",
+    "attach_files": "attach_files",
+    "read_message_history": "read_message_history",
+    "mention_everyone": "mention_everyone",
+    "use_external_emojis": "use_external_emojis",
+    "view_guild_insights": "view_guild_insights",
+    "connect": "connect",
+    "speak": "speak",
+    "mute_members": "mute_members",
+    "deafen_members": "deafen_members",
+    "move_members": "move_members",
+    "use_vad": "use_vad",
+    "change_nickname": "change_nickname",
+    "manage_nicknames": "manage_nicknames",
+    "manage_roles": "manage_roles",
+    "manage_webhooks": "manage_webhooks",
+    "manage_emojis_and_stickers": "manage_emojis_and_stickers",
+    "use_application_commands": "use_application_commands",
+    "request_to_speak": "request_to_speak",
+    "manage_events": "manage_events",
+    "manage_threads": "manage_threads",
+    "create_public_threads": "create_public_threads",
+    "create_private_threads": "create_private_threads",
+    "use_external_stickers": "use_external_stickers",
+    "send_messages_in_threads": "send_messages_in_threads",
+    "use_embedded_activities": "use_embedded_activities",
+    "moderate_members": "moderate_members"
+}
+
 # ----------- TASK LOOP ----------- #
 @tasks.loop(seconds=30)
 async def check_sheet():
@@ -44,7 +89,7 @@ async def check_sheet():
         channel_name = row.get("Channel Name", "").strip()
         channel_type = row.get("Type", "").strip().lower()
         role_name = row.get("Role", "").strip()
-        permission = row.get("Permission", "").strip().lower()
+        permission_list = row.get("Permissions List", "").strip().split(",")  # Comma-separated permissions
         status = row.get("Status", "").strip().lower()
 
         if status != "pending":
@@ -65,33 +110,30 @@ async def check_sheet():
                 if not target_channel:
                     raise Exception(f"Channel '{channel_name}' not found in guild '{guild.name}'")
 
+                if not role:
+                    raise Exception(f"No role specified for action on row {i}")
+
                 if action == "assign":
-                    if not role:
-                        raise Exception(f"No role specified for assign action on row {i}")
-                    permissions = {
-                        role: discord.PermissionOverwrite(
-                            read_messages=True,
-                            send_messages=True,
-                            connect=True,
-                            speak=True
-                        )
-                    }
-                    await target_channel.edit(overwrites=permissions)
-                    print(f"✅ [{guild.name}] Assigned permissions for role '{role_name}' on channel '{channel_name}'.")
+                    permissions = discord.PermissionOverwrite()
+                    for perm in permission_list:
+                        perm = perm.strip().lower()
+                        if perm in PERMISSION_MAPPING:
+                            setattr(permissions, PERMISSION_MAPPING[perm], True)
+                        else:
+                            print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
+                    await target_channel.set_permissions(role, overwrite=permissions)
+                    print(f"✅ [{guild.name}] Assigned permissions {permission_list} for role '{role_name}' on channel '{channel_name}'.")
 
                 elif action == "deassign":
-                    if not role:
-                        raise Exception(f"No role specified for deassign action on row {i}")
-                    permissions = {
-                        role: discord.PermissionOverwrite(
-                            read_messages=False,
-                            send_messages=False,
-                            connect=False,
-                            speak=False
-                        )
-                    }
-                    await target_channel.edit(overwrites=permissions)
-                    print(f"✅ [{guild.name}] Deassigned permissions for role '{role_name}' on channel '{channel_name}'.")
+                    permissions = discord.PermissionOverwrite()
+                    for perm in permission_list:
+                        perm = perm.strip().lower()
+                        if perm in PERMISSION_MAPPING:
+                            setattr(permissions, PERMISSION_MAPPING[perm], False)
+                        else:
+                            print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
+                    await target_channel.set_permissions(role, overwrite=permissions)
+                    print(f"✅ [{guild.name}] Deassigned permissions {permission_list} for role '{role_name}' on channel '{channel_name}'.")
 
                 sheet.update_cell(i, 7, "done")
 
