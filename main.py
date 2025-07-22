@@ -11,7 +11,7 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # ----------- CONFIG ----------- #
-SHEET_NAME = "Mason's Library"  # Google Sheet name
+SHEET_NAME = "Permission Bot"  # Google Sheet name
 
 # ----------- DISCORD SETUP ----------- #
 intents = discord.Intents.default()
@@ -43,6 +43,8 @@ async def check_sheet():
         category_name = row.get("Category", "").strip()
         channel_name = row.get("Channel Name", "").strip()
         channel_type = row.get("Type", "").strip().lower()
+        role_name = row.get("Role", "").strip()
+        permission = row.get("Permission", "").strip().lower()
         status = row.get("Status", "").strip().lower()
 
         if status != "pending":
@@ -51,19 +53,48 @@ async def check_sheet():
         for guild in bot.guilds:
             try:
                 category = discord.utils.get(guild.categories, name=category_name)
+                role = discord.utils.get(guild.roles, name=role_name) if role_name else None
 
                 if action == "create":
                     if not category:
                         category = await guild.create_category(category_name)
 
+                    channel = None
                     if channel_type == "text":
-                        await guild.create_text_channel(channel_name, category=category)
+                        channel = await guild.create_text_channel(channel_name, category=category)
                     elif channel_type == "voice":
-                        await guild.create_voice_channel(channel_name, category=category)
+                        channel = await guild.create_voice_channel(channel_name, category=category)
                     else:
                         raise Exception(f"Unknown channel type: '{channel_type}'")
 
                     print(f"✅ [{guild.name}] Created {channel_type} channel '{channel_name}' in '{category_name}'.")
+
+                    # Apply permissions if specified
+                    if role and permission:
+                        permissions = {}
+                        if permission == "allow":
+                            permissions = {
+                                role: discord.PermissionOverwrite(
+                                    read_messages=True,
+                                    send_messages=True,
+                                    connect=True,
+                                    speak=True
+                                )
+                            }
+                        elif permission == "deny":
+                            permissions = {
+                                role: discord.PermissionOverwrite(
+                                    read_messages=False,
+                                    send_messages=False,
+                                    connect=False,
+                                    speak=False
+                                )
+                            }
+                        else:
+                            raise Exception(f"Unknown permission: '{permission}'")
+
+                        await channel.edit(overwrites=permissions)
+                        print(f"✅ [{guild.name}] Set {permission} permissions for role '{role_name}' on channel '{channel_name}'.")
 
                 elif action == "delete":
                     if channel_name:
@@ -79,11 +110,43 @@ async def check_sheet():
                             await category.delete()
                             print(f"🗑 [{guild.name}] Deleted category '{category_name}' and all its channels.")
 
-                sheet.update_cell(i, 5, "done")
+                elif action == "assign":
+                    if not role:
+                        raise Exception(f"No role specified for assign action on row {i}")
+                    target_channel = discord.utils.get(guild.channels, name=channel_name)
+                    if target_channel:
+                        permissions = {
+                            role: discord.PermissionOverwrite(
+                                read_messages=True,
+                                send_messages=True,
+                                connect=True,
+                                speak=True
+                            )
+                        }
+                        await target_channel.edit(overwrites=permissions)
+                        print(f"✅ [{guild.name}] Assigned permissions for role '{role_name}' on channel '{channel_name}'.")
+
+                elif action == "deassign":
+                    if not role:
+                        raise Exception(f"No role specified for deassign action on row {i}")
+                    target_channel = discord.utils.get(guild.channels, name=channel_name)
+                    if target_channel:
+                        permissions = {
+                            role: discord.PermissionOverwrite(
+                                read_messages=False,
+                                send_messages=False,
+                                connect=False,
+                                speak=False
+                            )
+                        }
+                        await target_channel.edit(overwrites=permissions)
+                        print(f"✅ [{guild.name}] Deassigned permissions for role '{role_name}' on channel '{channel_name}'.")
+
+                sheet.update_cell(i, 8, "done")
 
             except Exception as e:
                 print(f"❌ [{guild.name}] Error on row {i}: {e}")
-                sheet.update_cell(i, 5, "error")
+                sheet.update_cell(i, 8, "error")
 
 # ----------- BOT EVENTS ----------- #
 @bot.event
