@@ -85,9 +85,6 @@ async def check_sheet():
 
     for i, row in enumerate(records, start=2):  # start=2 to match Sheet row numbers
         action = row.get("Action", "").strip().lower()
-        category_name = row.get("Category", "").strip()
-        channel_name = row.get("Channel Name", "").strip()
-        channel_type = row.get("Type", "").strip().lower()
         role_name = row.get("Role", "").strip()
         permission_list = row.get("Permissions List", "").strip().split(",")  # Comma-separated permissions
         status = row.get("Status", "").strip().lower()
@@ -97,49 +94,40 @@ async def check_sheet():
 
         for guild in bot.guilds:
             try:
-                category = discord.utils.get(guild.categories, name=category_name)
-                role = discord.utils.get(guild.roles, name=role_name) if role_name else None
-                target_channel = None
-
-                # Find the target channel (either under the category or directly in guild)
-                if category:
-                    target_channel = discord.utils.get(category.channels, name=channel_name)
-                if not target_channel:
-                    target_channel = discord.utils.get(guild.channels, name=channel_name)
-
-                if not target_channel:
-                    raise Exception(f"Channel '{channel_name}' not found in guild '{guild.name}'")
-
+                role = discord.utils.get(guild.roles, name=role_name)
                 if not role:
-                    raise Exception(f"No role specified for action on row {i}")
+                    raise Exception(f"Role '{role_name}' not found in guild '{guild.name}'")
 
                 if action == "assign":
-                    permissions = discord.PermissionOverwrite()
+                    permissions = discord.Permissions()
                     for perm in permission_list:
                         perm = perm.strip().lower()
                         if perm in PERMISSION_MAPPING:
                             setattr(permissions, PERMISSION_MAPPING[perm], True)
                         else:
                             print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
-                    await target_channel.set_permissions(role, overwrite=permissions)
-                    print(f"✅ [{guild.name}] Assigned permissions {permission_list} for role '{role_name}' on channel '{channel_name}'.")
+                    await role.edit(permissions=permissions)
+                    print(f"✅ [{guild.name}] Assigned permissions {permission_list} to role '{role_name}'.")
 
                 elif action == "deassign":
-                    permissions = discord.PermissionOverwrite()
+                    permissions = discord.Permissions()
                     for perm in permission_list:
                         perm = perm.strip().lower()
                         if perm in PERMISSION_MAPPING:
                             setattr(permissions, PERMISSION_MAPPING[perm], False)
                         else:
                             print(f"⚠️ Unknown permission '{perm}' ignored for row {i}")
-                    await target_channel.set_permissions(role, overwrite=permissions)
-                    print(f"✅ [{guild.name}] Deassigned permissions {permission_list} for role '{role_name}' on channel '{channel_name}'.")
+                    # Create a new permission set to remove specified permissions
+                    current_perms = role.permissions
+                    new_perms = discord.Permissions(current_perms.value & ~permissions.value)
+                    await role.edit(permissions=new_perms)
+                    print(f"✅ [{guild.name}] Deassigned permissions {permission_list} from role '{role_name}'.")
 
-                sheet.update_cell(i, 7, "done")
+                sheet.update_cell(i, 4, "done")  # Update Status column (now index 4 due to fewer columns)
 
             except Exception as e:
                 print(f"❌ [{guild.name}] Error on row {i}: {e}")
-                sheet.update_cell(i, 7, "error")
+                sheet.update_cell(i, 4, "error")  # Update Status column
 
 # ----------- BOT EVENTS ----------- #
 @bot.event
